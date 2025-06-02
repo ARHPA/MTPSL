@@ -29,7 +29,7 @@ parser.add_argument('--out', default='./results/cityscapes', help='Directory to 
 parser.add_argument('--alpha', default=1.5, type=float, help='hyper params of GradNorm')
 parser.add_argument('--ssl-type', default='randomlabels', type=str, help='ssl type: onelabel, randomlabels, full')
 parser.add_argument('--labelroot', default='./data/cityscapes_settings/', type=str, help='partially setting root')
-parser.add_argument('--resume', default='/content/drive/MyDrive', type=str, metavar='PATH', help='path to latest checkpoint (default: none)')
+parser.add_argument('--resume', default='', type=str, metavar='PATH', help='path to latest checkpoint (default: none)')
 parser.add_argument('--eval-last20', default=0, type=int, help='1 means we evaluate models in the last 20 epochs')
 parser.add_argument('--rampup', default='fixed', type=str, help='up for ramp-up loss weight of cross-task consistency loss, fixed use constant loss weight.')
 parser.add_argument('--con-weight', default=1.0, type=float, help='weight for cross-task consistency loss')
