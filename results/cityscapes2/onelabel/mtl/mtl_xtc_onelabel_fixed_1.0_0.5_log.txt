@@ -1,0 +1,1 @@
+Epoch	T.Ls	T. mIoU	T. Pix	T.Ld	T.abs	T.rel	V.Ls	V. mIoU	V. Pix	V.Ld	V.abs	V.rel	Con L	Ws	Wd	

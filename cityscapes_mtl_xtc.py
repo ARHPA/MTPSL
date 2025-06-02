@@ -110,12 +110,12 @@ batch_size = 8
 cityscapes_train_loader = torch.utils.data.DataLoader(
     dataset=cityscapes_train_set,
     batch_size=batch_size,
-    shuffle=True, num_workers=4)
+    shuffle=True, num_workers=2)
 
 cityscapes_test_loader = torch.utils.data.DataLoader(
     dataset=cityscapes_test_set,
     batch_size=batch_size,
-    shuffle=False, num_workers=4)
+    shuffle=False, num_workers=2)
 
 
 # define parameters
@@ -155,7 +155,8 @@ for epoch in range(start_epoch, total_epoch):
     cost_depth = AverageMeter()
     cityscapes_train_dataset = iter(cityscapes_train_loader)
     for k in range(train_batch):
-        train_data, train_label, train_depth, image_index, train_data1, train_label1, train_depth1, trans_params, flip = cityscapes_train_dataset.next()
+        # train_data, train_label, train_depth, image_index, train_data1, train_label1, train_depth1, trans_params, flip = cityscapes_train_dataset.next()
+        train_data, train_label, train_depth, image_index, train_data1, train_label1, train_depth1, trans_params, flip = next(cityscapes_train_dataset)
         train_data, train_label = train_data.cuda(), train_label.type(torch.LongTensor).cuda()
         train_depth = train_depth.cuda()
         train_data1, train_label1 = train_data1.cuda(), train_label1.type(torch.LongTensor).cuda()
@@ -249,6 +250,7 @@ for epoch in range(start_epoch, total_epoch):
             cityscapes_test_dataset = iter(cityscapes_test_loader)
             for k in range(test_batch):
                 test_data, test_label, test_depth = cityscapes_test_dataset.next()
+                test_data, test_label, test_depth = next(cityscapes_test_dataset)
                 test_data, test_label = test_data.cuda(),  test_label.type(torch.LongTensor).cuda()
                 test_depth = test_depth.cuda()
 
