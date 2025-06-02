@@ -249,7 +249,7 @@ for epoch in range(start_epoch, total_epoch):
         with torch.no_grad():  # operations inside don't track history
             cityscapes_test_dataset = iter(cityscapes_test_loader)
             for k in range(test_batch):
-                test_data, test_label, test_depth = cityscapes_test_dataset.next()
+                # test_data, test_label, test_depth = cityscapes_test_dataset.next()
                 test_data, test_label, test_depth = next(cityscapes_test_dataset)
                 test_data, test_label = test_data.cuda(),  test_label.type(torch.LongTensor).cuda()
                 test_depth = test_depth.cuda()
