@@ -126,7 +126,7 @@ T = opt.temp
 avg_cost = np.zeros([total_epoch, 12], dtype=np.float32)
 ctl_cost = np.zeros([total_epoch, 1], dtype=np.float32)
 lambda_weight = np.zeros([len(tasks), total_epoch])
-best_performance = -100
+best_performance = -1000
 isbest=False
 
 for epoch in range(start_epoch, total_epoch):
