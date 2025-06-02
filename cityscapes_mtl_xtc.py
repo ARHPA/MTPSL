@@ -81,7 +81,7 @@ optimizer_film = optim.Adam(params_film, lr=1e-5)
 scheduler_film = optim.lr_scheduler.StepLR(optimizer_film, step_size=30, gamma=0.5)
 start_epoch = 0
 if opt.resume:
-    checkpoint = torch.load(opt.resume)
+    checkpoint = torch.load(opt.resume, weights_only=False)
     model.load_state_dict(checkpoint['state_dict'], strict=True)
     start_epoch = checkpoint['epoch']
     optimizer.load_state_dict(checkpoint['optimizer'])
