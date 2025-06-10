@@ -194,6 +194,7 @@ class SegNet(nn.Module):
         feat.append(g_decoder[i][1])
 
         print(f"features: {feat[0].shape}")
+        print(f"features: {feat[1].shape}")
         # define task prediction layers
         t1_pred = F.log_softmax(self.pred_task1(g_decoder[i][1]), dim=1)
         t2_pred = self.pred_task2(g_decoder[i][1])

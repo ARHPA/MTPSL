@@ -280,7 +280,7 @@ class Mapfns(nn.Module):
         for t, task in enumerate(tasks):
             self.input_channels[task] = input_channels[t]
 
-        self.mapfns = SegFormerMTL_enc(input_channels=input_channels)
+        self.mapfns = SegNet_enc(input_channels=input_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
