@@ -217,6 +217,8 @@ for epoch in range(start_epoch, total_epoch):
                     train_loss_ind[i] = 0
             train_pred_ind = [train_pred_seg, train_pred_depth]
 
+            
+
             # compute the cross-task consistency loss
             con_loss = mapfns(train_pred_ind, train_target_ind, feat_aug[ind_].unsqueeze(0), copy.deepcopy(w), ssl_type=opt.ssl_type)
 

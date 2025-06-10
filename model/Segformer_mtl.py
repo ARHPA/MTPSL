@@ -164,17 +164,27 @@ class SegFormerMTL(nn.Module):
     def forward(self, x):
         batch_size, _, input_h, input_w = x.shape
         
-        # Get features from SegFormer encoder
-        outputs = self.segformer.segformer(x)
-        encoder_hidden_states = outputs.last_hidden_state
-        print(encoder_hidden_states.shape)
-        print(encoder_hidden_states.shape[2])
-        print(encoder_hidden_states.shape[3])
-
-
-        # Pass through SegFormer decoder to get features
-        decoder_outputs = self.segformer.decode_head(encoder_hidden_states)
-        features = decoder_outputs  # Shape: [batch_size, decoder_hidden_size, H/4, W/4]
+        # FIXED: Use the complete SegFormer model instead of accessing encoder and decoder separately
+        # This ensures proper handling of the encoder-decoder connection
+        segformer_outputs = self.segformer(x)
+        
+        # Get the logits from SegFormer (this is the feature representation we want)
+        # The logits have shape [batch_size, num_labels, H/4, W/4]
+        segformer_logits = segformer_outputs.logits
+        
+        # Use the logits as features for our task-specific heads
+        # First, convert to the expected feature dimension
+        if segformer_logits.shape[1] != self.feature_dim:
+            # Add a feature projection layer if dimensions don't match
+            if not hasattr(self, 'feature_projection'):
+                self.feature_projection = nn.Conv2d(
+                    segformer_logits.shape[1], 
+                    self.feature_dim, 
+                    kernel_size=1
+                ).to(segformer_logits.device)
+            features = self.feature_projection(segformer_logits)
+        else:
+            features = segformer_logits
         
         # Upsample features to match input resolution
         features_upsampled = F.interpolate(
