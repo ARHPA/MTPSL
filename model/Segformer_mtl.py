@@ -164,31 +164,31 @@ class SegFormerMTL(nn.Module):
     def forward(self, x):
         batch_size, _, input_h, input_w = x.shape
         
-        # FIXED: Use the complete SegFormer model instead of accessing encoder and decoder separately
-        # This ensures proper handling of the encoder-decoder connection
-        segformer_outputs = self.segformer(x)
+        # Extract encoder hidden states (including 1/32 scale features)
+        segformer_outputs = self.segformer(x, output_hidden_states=True)
         
-        # Get the logits from SegFormer (this is the feature representation we want)
-        # The logits have shape [batch_size, num_labels, H/4, W/4]
+        # Get the 1/32 scale features (last encoder output)
+        # hidden_states[4] corresponds to the final 1/32 scale output
+        features = segformer_outputs.hidden_states[-1]  # Shape: [bs, 256, H/32, W/32]
+        
+        # Get the decoder logits (for task predictions)
         segformer_logits = segformer_outputs.logits
         
-        # Use the logits as features for our task-specific heads
-        # First, convert to the expected feature dimension
+        # Project logits if needed (for compatibility with heads)
         if segformer_logits.shape[1] != self.feature_dim:
-            # Add a feature projection layer if dimensions don't match
             if not hasattr(self, 'feature_projection'):
                 self.feature_projection = nn.Conv2d(
                     segformer_logits.shape[1], 
                     self.feature_dim, 
                     kernel_size=1
                 ).to(segformer_logits.device)
-            features = self.feature_projection(segformer_logits)
+            features_for_tasks = self.feature_projection(segformer_logits)
         else:
-            features = segformer_logits
+            features_for_tasks = segformer_logits
         
-        # Upsample features to match input resolution
+        # Upsample for task heads (to original resolution)
         features_upsampled = F.interpolate(
-            features, 
+            features_for_tasks, 
             size=(input_h, input_w), 
             mode='bilinear', 
             align_corners=False
@@ -201,8 +201,7 @@ class SegFormerMTL(nn.Module):
         # Apply log softmax to semantic predictions
         semantic_pred = F.log_softmax(semantic_logits, dim=1)
         
-        print(f"features: {features.shape}")
-        # Create feature list for compatibility
+        # Return features as [1/32 scale, upsampled features]
         feat = [features, features_upsampled]
         
         return [semantic_pred, depth_pred], self.logsigma_dist, feat

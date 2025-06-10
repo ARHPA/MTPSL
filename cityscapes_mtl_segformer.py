@@ -93,7 +93,7 @@ for name, param in model.named_parameters():
     else:
         head_params.append(param)
 
-head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
+# head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
 
 optimizer = optim.Adam([
     {'params': backbone_params, 'lr': 1e-5},
@@ -102,8 +102,8 @@ optimizer = optim.Adam([
 
 
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
-params_film = [v for k, v in mapfns.named_parameters()]
-# params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
+# params_film = [v for k, v in mapfns.named_parameters()]
+params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
 # optimizer for the conditional auxiliary network
 optimizer_film = optim.Adam(params_film, lr=1e-5)
 scheduler_film = optim.lr_scheduler.StepLR(optimizer_film, step_size=30, gamma=0.5)
@@ -218,10 +218,10 @@ for epoch in range(start_epoch, total_epoch):
                     train_loss_ind[i] = 0
             train_pred_ind = [train_pred_seg, train_pred_depth]
 
-            print(f"train_pred_ind: {train_pred_ind[0].shape}, {train_pred_ind[1].shape}")
-            print(f"train_target_ind: {train_target_ind[0].shape}, {train_target_ind[1].shape}")
-            print(f"feat_aug[ind_].unsqueeze(0): {feat_aug[ind_].unsqueeze(0).shape}")
-            print(f"copy.deepcopy(w): {copy.deepcopy(w).shape}")
+            # print(f"train_pred_ind: {train_pred_ind[0].shape}, {train_pred_ind[1].shape}")
+            # print(f"train_target_ind: {train_target_ind[0].shape}, {train_target_ind[1].shape}")
+            # print(f"feat_aug[ind_].unsqueeze(0): {feat_aug[ind_].unsqueeze(0).shape}")
+            # print(f"copy.deepcopy(w): {copy.deepcopy(w).shape}")
             # compute the cross-task consistency loss
             con_loss = mapfns(train_pred_ind, train_target_ind, feat_aug[ind_].unsqueeze(0), copy.deepcopy(w), ssl_type=opt.ssl_type)
 

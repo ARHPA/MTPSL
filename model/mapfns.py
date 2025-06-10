@@ -280,7 +280,7 @@ class Mapfns(nn.Module):
         for t, task in enumerate(tasks):
             self.input_channels[task] = input_channels[t]
 
-        self.mapfns = SegNet_enc(input_channels=input_channels)
+        self.mapfns = SegFormerMTL_enc(input_channels=input_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -324,15 +324,15 @@ class Mapfns(nn.Module):
                         A_taskpair = A_taskpair.flatten()[:-1].view(n-1,n+1)[:,1:].flatten().view(1,-1)
                         config_task.A_taskpair = A_taskpair
                         
-                        print(f"source_pred: {source_pred.shape}")
-                        print(f"target_gt: {target_gt.shape}")
+                        # print(f"source_pred: {source_pred.shape}")
+                        # print(f"target_gt: {target_gt.shape}")
 
                         mapout_source = self.mapfns(source_pred, input_task=source_task)
                         mapout_target = self.mapfns(target_gt, input_task=target_task)
 
-                        print(f"mapout_source: {mapout_source.shape}")
-                        print(f"mapout_target: {mapout_target.shape}")
-                        print(f"feat: {feat.detach().shape}")
+                        # print(f"mapout_source: {mapout_source.shape}")
+                        # print(f"mapout_target: {mapout_target.shape}")
+                        # print(f"feat: {feat.detach().shape}")
 
                         loss = loss + self.compute_loss(mapout_source, mapout_target, feat, reg_weight=reg_weight)
                  
