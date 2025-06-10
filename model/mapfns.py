@@ -8,6 +8,8 @@ import numpy as np
 import model.config_task as config_task
 import pdb
 
+from transformers import SegformerForSemanticSegmentation, SegformerConfig
+
 def cross_entropy_loss(logits, targets):
     log_p_y = F.log_softmax(logits, dim=1)
     labels = targets.type(torch.long)
@@ -46,6 +48,164 @@ class conv_task(nn.Module):
 
 
         return x
+
+
+class SegFormerMTL_enc(nn.Module):
+    def __init__(self, input_channels):
+        super(SegFormerMTL_enc, self).__init__()
+        
+        self.num_tasks = len(input_channels)
+        self.input_channels = input_channels
+        
+        # Initialize SegFormer backbone with lightweight configuration
+        config = SegformerConfig(
+            num_channels=3,
+            num_labels=150,  # Use standard ADE20K labels for pretrained model
+            image_size=512,
+            num_encoder_blocks=4,
+            depths=[2, 2, 2, 2],  # Lightweight configuration
+            sr_ratios=[8, 4, 2, 1],
+            hidden_sizes=[32, 64, 160, 256],  # Smaller hidden sizes for lightweight variant
+            patch_sizes=[7, 3, 3, 3],
+            strides=[4, 2, 2, 2],
+            num_attention_heads=[1, 2, 5, 8],
+            mlp_ratios=[4, 4, 4, 4],
+            hidden_act="gelu",
+            hidden_dropout_prob=0.0,
+            attention_probs_dropout_prob=0.0,
+            classifier_dropout_prob=0.1,
+            initializer_range=0.02,
+            drop_path_rate=0.1,
+            layer_norm_eps=1e-6,
+            decoder_hidden_size=256,
+            semantic_loss_ignore_index=-1,
+        )
+        
+        # Load pretrained SegFormer backbone
+        self.segformer = SegformerForSemanticSegmentation.from_pretrained(
+            "nvidia/segformer-b0-finetuned-ade-512-512", 
+            config=config,
+            ignore_mismatched_sizes=True
+        )
+        
+        # Get the encoder for feature extraction
+        self.encoder = self.segformer.segformer.encoder
+        
+        # Task-specific input preprocessing layers
+        self.pred_encoder_source = nn.ModuleList()
+        for i in range(len(input_channels)):
+            if input_channels[i] == 3:
+                # For RGB input, use identity mapping
+                self.pred_encoder_source.append(nn.Identity())
+            else:
+                # For other inputs, project to 3 channels to match SegFormer input
+                self.pred_encoder_source.append(
+                    nn.Sequential(
+                        nn.Conv2d(input_channels[i], 64, kernel_size=3, padding=1),
+                        nn.BatchNorm2d(64),
+                        nn.ReLU(inplace=True),
+                        nn.Conv2d(64, 3, kernel_size=3, padding=1),
+                        nn.BatchNorm2d(3),
+                        nn.ReLU(inplace=True)
+                    )
+                )
+        
+        # Feature dimension from SegFormer encoder
+        self.feature_dim = 256  # Last hidden size from config
+        
+        # Task-conditioned feature projection
+        self.task_projections = nn.ModuleList()
+        for i in range(self.num_tasks):
+            self.task_projections.append(
+                nn.Sequential(
+                    nn.Conv2d(self.feature_dim, self.feature_dim, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(self.feature_dim),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(self.feature_dim, self.feature_dim, kernel_size=1),
+                    nn.BatchNorm2d(self.feature_dim),
+                    nn.ReLU(inplace=True)
+                )
+            )
+        
+        # Initialize custom layers
+        self._init_weights()
+    
+    def _init_weights(self):
+        for m in self.pred_encoder_source:
+            if isinstance(m, nn.Sequential):
+                for module in m.modules():
+                    if isinstance(module, nn.Conv2d):
+                        nn.init.xavier_normal_(module.weight)
+                        if module.bias is not None:
+                            nn.init.constant_(module.bias, 0)
+                    elif isinstance(module, nn.BatchNorm2d):
+                        nn.init.constant_(module.weight, 1)
+                        nn.init.constant_(module.bias, 0)
+        
+        for m in self.task_projections:
+            for module in m.modules():
+                if isinstance(module, nn.Conv2d):
+                    nn.init.xavier_normal_(module.weight)
+                    if module.bias is not None:
+                        nn.init.constant_(module.bias, 0)
+                elif isinstance(module, nn.BatchNorm2d):
+                    nn.init.constant_(module.weight, 1)
+                    nn.init.constant_(module.bias, 0)
+    
+    def forward(self, x, input_task):
+        batch_size, _, input_h, input_w = x.shape
+        
+        # Task-specific input preprocessing
+        x_processed = self.pred_encoder_source[input_task](x)
+        
+        # Extract features using SegFormer encoder
+        encoder_outputs = self.encoder(
+            x_processed,
+            output_attentions=False,
+            output_hidden_states=True,
+            return_dict=True
+        )
+        
+        # Get the last hidden state (highest level features)
+        # encoder_outputs.hidden_states contains features from all stages
+        # Use the last stage features for the deepest representation
+        last_hidden_state = encoder_outputs.hidden_states[-1]
+        
+        # Apply task-specific projection
+        task_features = self.task_projections[input_task](last_hidden_state)
+        
+        return task_features
+    
+    def get_multi_scale_features(self, x, input_task):
+        """
+        Alternative method to get multi-scale features from all encoder stages
+        Useful for feature pyramid or multi-scale processing
+        """
+        batch_size, _, input_h, input_w = x.shape
+        
+        # Task-specific input preprocessing
+        x_processed = self.pred_encoder_source[input_task](x)
+        
+        # Extract features using SegFormer encoder
+        encoder_outputs = self.encoder(
+            x_processed,
+            output_attentions=False,
+            output_hidden_states=True,
+            return_dict=True
+        )
+        
+        # Get features from all stages
+        multi_scale_features = []
+        for i, hidden_state in enumerate(encoder_outputs.hidden_states):
+            # Apply task-specific projection to each scale
+            if i < len(self.task_projections):
+                projected_features = self.task_projections[input_task](hidden_state)
+            else:
+                # For stages beyond our projections, use the last projection
+                projected_features = self.task_projections[input_task](hidden_state)
+            multi_scale_features.append(projected_features)
+        
+        return multi_scale_features
 
 class SegNet_enc(nn.Module):
     def __init__(self, input_channels):
@@ -120,7 +280,7 @@ class Mapfns(nn.Module):
         for t, task in enumerate(tasks):
             self.input_channels[task] = input_channels[t]
 
-        self.mapfns = SegNet_enc(input_channels=input_channels)
+        self.mapfns = SegFormerMTL_enc(input_channels=input_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -163,9 +323,16 @@ class Mapfns(nn.Module):
                         n, m = A_taskpair.size()
                         A_taskpair = A_taskpair.flatten()[:-1].view(n-1,n+1)[:,1:].flatten().view(1,-1)
                         config_task.A_taskpair = A_taskpair
+                        
+                        print(f"source_pred: {source_pred.shape}")
+                        print(f"target_gt: {target_gt.shape}")
 
                         mapout_source = self.mapfns(source_pred, input_task=source_task)
                         mapout_target = self.mapfns(target_gt, input_task=target_task)
+
+                        print(f"mapout_source: {mapout_source.shape}")
+                        print(f"mapout_target: {mapout_target.shape}")
+                        print(f"feat: {feat.detach().shape}")
 
                         loss = loss + self.compute_loss(mapout_source, mapout_target, feat, reg_weight=reg_weight)
                  

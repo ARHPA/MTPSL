@@ -54,7 +54,7 @@ stl_performance = {
                     }
 
 
-def save_checkpoint(state, is_best, checkpoint="/content/drive/MyDrive", filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, checkpoint="/content", filename='checkpoint.pth.tar'):
     filepath = os.path.join(checkpoint, 'mtl_xtc_{}_{}_{}_{}_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
     torch.save(state, filepath)
     if is_best:
@@ -187,6 +187,12 @@ for epoch in range(start_epoch, total_epoch):
                 if w[i] == 0:
                     train_loss_ind[i] = 0
             train_pred_ind = [train_pred_seg, train_pred_depth]
+
+
+            print(f"train_pred_ind: {train_pred_ind[0].shape}, {train_pred_ind[1].shape}")
+            print(f"train_target_ind: {train_target_ind[0].shape}, {train_target_ind[1].shape}")
+            print(f"feat_aug[ind_].unsqueeze(0): {feat_aug[ind_].unsqueeze(0).shape}")
+            print(f"copy.deepcopy(w): {copy.deepcopy(w).shape}")
 
             # compute the cross-task consistency loss
             con_loss = mapfns(train_pred_ind, train_target_ind, feat_aug[ind_].unsqueeze(0), copy.deepcopy(w), ssl_type=opt.ssl_type)

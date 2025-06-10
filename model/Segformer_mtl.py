@@ -201,6 +201,7 @@ class SegFormerMTL(nn.Module):
         # Apply log softmax to semantic predictions
         semantic_pred = F.log_softmax(semantic_logits, dim=1)
         
+        print(f"features: {features.shape}")
         # Create feature list for compatibility
         feat = [features, features_upsampled]
         
