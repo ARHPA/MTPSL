@@ -211,7 +211,8 @@ class SegNet_enc(nn.Module):
     def __init__(self, input_channels):
         super(SegNet_enc, self).__init__()
         # initialise network parameters
-        filter = [64, 128, 256, 512, 512]
+        # filter = [64, 128, 256, 512, 512]
+        filter = [64, 128, 128, 256, 256]
         self.filter = filter
         self.num_tasks = len(input_channels)
         # Task-specific input layer
@@ -280,7 +281,7 @@ class Mapfns(nn.Module):
         for t, task in enumerate(tasks):
             self.input_channels[task] = input_channels[t]
 
-        self.mapfns = SegFormerMTL_enc(input_channels=input_channels)
+        self.mapfns = SegNet_enc(input_channels=input_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

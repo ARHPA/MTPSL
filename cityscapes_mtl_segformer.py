@@ -93,19 +93,19 @@ for name, param in model.named_parameters():
     else:
         head_params.append(param)
 
-# head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
+head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
 
 optimizer = optim.Adam([
-    {'params': backbone_params, 'lr': 1e-6},
+    {'params': backbone_params, 'lr': 5e-6},
     {'params': head_params, 'lr': 1e-4}
 ])
-
-
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
-params_film = [v for k, v in mapfns.named_parameters()]
-# params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
+
+
+# params_film = [v for k, v in mapfns.named_parameters()]
+params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
 # optimizer for the conditional auxiliary network
-optimizer_film = optim.Adam(params_film, lr=1e-6)
+optimizer_film = optim.Adam(params_film, lr=1e-5)
 scheduler_film = optim.lr_scheduler.StepLR(optimizer_film, step_size=30, gamma=0.5)
 
 
