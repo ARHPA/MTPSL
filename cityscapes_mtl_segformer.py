@@ -57,15 +57,15 @@ stl_performance = {
                     }
 
 # checkpoint="/content/drive/MyDrive"
-def save_checkpoint(state, is_best, checkpoint="/content", filename='checkpoint.pth.tar'):
-    filepath = os.path.join(checkpoint, 'mtl_xtc_{}_{}_{}_{}_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
+def save_checkpoint(state, is_best, checkpoint="/content/drive/MyDrive", filename='checkpoint.pth.tar'):
+    filepath = os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
     torch.save(state, filepath)
     if is_best:
-        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_xtc_{}_{}_{}_{}_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + 'model_best.pth.tar'))
+        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + 'model_best.pth.tar'))
 
 
 title = 'Cityscapes'
-logger = Logger(os.path.join(opt.out, 'mtl_xtc_{}_{}_{}_{}_log.txt'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight)), title=title)
+logger = Logger(os.path.join(opt.out, 'mtl_segformer_{}_{}_{}_{}_log.txt'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight)), title=title)
 logger.set_names(['Epoch', 'T.Ls', 'T. mIoU', 'T. Pix', 'T.Ld', 'T.abs', 'T.rel',
     'V.Ls', 'V. mIoU', 'V. Pix', 'V.Ld', 'V.abs', 'V.rel', 'Con L', 'Ws', 'Wd'])
 
@@ -96,16 +96,16 @@ for name, param in model.named_parameters():
 # head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
 
 optimizer = optim.Adam([
-    {'params': backbone_params, 'lr': 1e-5},
+    {'params': backbone_params, 'lr': 1e-6},
     {'params': head_params, 'lr': 1e-4}
 ])
 
 
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
-# params_film = [v for k, v in mapfns.named_parameters()]
-params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
+params_film = [v for k, v in mapfns.named_parameters()]
+# params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta' in k]
 # optimizer for the conditional auxiliary network
-optimizer_film = optim.Adam(params_film, lr=1e-5)
+optimizer_film = optim.Adam(params_film, lr=1e-6)
 scheduler_film = optim.lr_scheduler.StepLR(optimizer_film, step_size=30, gamma=0.5)
 
 
