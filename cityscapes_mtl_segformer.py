@@ -136,7 +136,7 @@ if opt.ssl_type == 'onelabel':
 cityscapes_train_set = Cityscapes_crop(root=dataset_path, train=True, augmentation=True, aug_twice=True, flip=True)
 cityscapes_test_set = Cityscapes(root=dataset_path, train=False)
 
-batch_size = 8
+batch_size = 16
 cityscapes_train_loader = torch.utils.data.DataLoader(
     dataset=cityscapes_train_set,
     batch_size=batch_size,
