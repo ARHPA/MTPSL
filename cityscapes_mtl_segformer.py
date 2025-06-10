@@ -108,15 +108,21 @@ params_film = [v for k, v in mapfns.named_parameters() if 'gamma' in k or 'beta'
 optimizer_film = optim.Adam(params_film, lr=1e-5)
 scheduler_film = optim.lr_scheduler.StepLR(optimizer_film, step_size=30, gamma=0.5)
 
-
+total_epoch = 200
+best_performance = -1000
+avg_cost = np.zeros([total_epoch, 12], dtype=np.float32)
 start_epoch = 0
 if opt.resume:
     checkpoint = torch.load(opt.resume, weights_only=False)
     model.load_state_dict(checkpoint['state_dict'], strict=True)
+    mapfns.load_state_dict(checkpoint["mapfns"], strict=True)
     start_epoch = checkpoint['epoch']
+    best_performance = checkpoint["best_performance"]
+    avg_cost = checkpoint["avg_cost"]
     optimizer.load_state_dict(checkpoint['optimizer'])
     optimizer_film.load_state_dict(checkpoint['optimizer_film'])
     print('=> checkpoint from {} loaded!'.format(opt.resume))
+
 
 
 # compute parameter space
@@ -124,8 +130,9 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-print('Parameter Space: ABS: {:.1f}, REL: {:.4f}\n'.format(count_parameters(model),
-                                                           count_parameters(model)/24981069))
+print('Parameter Space: ABS: {:.1f}\n'.format(count_parameters(model)))
+print('Total Parameter Space: ABS: {:.1f}, REL: {:.4f}\n'.format(count_parameters(model) + count_parameters(mapfns),
+                                                           count_parameters(model)/39081069))
 print('LOSS FORMAT: SEMANTIC_LOSS MEAN_IOU PIX_ACC | DEPTH_LOSS ABS_ERR ROOT_MSE | NORMAL_LOSS MEAN MED <11.25 <22.5 <30\n')
 
 # define dataset path
@@ -149,14 +156,14 @@ cityscapes_test_loader = torch.utils.data.DataLoader(
 
 
 # define parameters
-total_epoch = 200
+
 train_batch = len(cityscapes_train_loader)
 test_batch = len(cityscapes_test_loader)
 T = opt.temp
-avg_cost = np.zeros([total_epoch, 12], dtype=np.float32)
+
 ctl_cost = np.zeros([total_epoch, 1], dtype=np.float32)
 lambda_weight = np.zeros([len(tasks), total_epoch])
-best_performance = -1000
+# best_performance = -1000
 isbest=False
 
 for epoch in range(start_epoch, total_epoch):
