@@ -114,7 +114,7 @@ avg_cost = np.zeros([total_epoch, 12], dtype=np.float32)
 start_epoch = 0
 if opt.resume:
     checkpoint = torch.load(opt.resume, weights_only=False)
-    model.load_state_dict(checkpoint['state_dict'], strict=True)
+    model.load_state_dict(checkpoint['state_dict'])
     mapfns.load_state_dict(checkpoint["mapfns"], strict=True)
     start_epoch = checkpoint['epoch']
     best_performance = checkpoint["best_performance"]
