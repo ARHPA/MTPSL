@@ -96,10 +96,10 @@ for name, param in model.named_parameters():
 head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
 
 optimizer = optim.Adam([
-    {'params': backbone_params, 'lr': 5e-6},
+    {'params': backbone_params, 'lr': 1e-5},
     {'params': head_params, 'lr': 1e-4}
 ])
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
 
 
 # params_film = [v for k, v in mapfns.named_parameters()]
@@ -121,6 +121,8 @@ if opt.resume:
     avg_cost = checkpoint["avg_cost"]
     optimizer.load_state_dict(checkpoint['optimizer'])
     optimizer_film.load_state_dict(checkpoint['optimizer_film'])
+    scheduler_film.load_state_dict(checkpoint['scheduler_film'])
+    scheduler.load_state_dict(checkpoint['scheduler'])
     print('=> checkpoint from {} loaded!'.format(opt.resume))
 
 
@@ -337,6 +339,8 @@ for epoch in range(start_epoch, total_epoch):
             'best_performance': best_performance,
             'optimizer' : optimizer.state_dict(),
             'optimizer_film': optimizer_film.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'scheduler_film': scheduler_film.state_dict(),
             'avg_cost': avg_cost,
         }, isbest) 
 print('Epoch: {:04d} | TRAIN: {:.4f} {:.4f} {:.4f} | {:.4f} {:.4f} {:.4f} '
