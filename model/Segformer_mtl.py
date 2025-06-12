@@ -125,7 +125,13 @@ class SegFormerMTL(nn.Module):
         
         # Get feature dimensions from the encoder
         self.feature_dim = 256  # decoder hidden size
-        
+      
+        self.feature_projection = nn.Conv2d(
+            self.segformer.config.num_labels,
+            self.feature_dim, 
+            kernel_size=1
+        )
+
         # Task-specific heads
         self.semantic_head = nn.Sequential(
             nn.Conv2d(self.feature_dim, 128, kernel_size=3, padding=1),

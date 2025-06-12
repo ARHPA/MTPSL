@@ -58,10 +58,10 @@ stl_performance = {
 
 # checkpoint="/content/drive/MyDrive"
 def save_checkpoint(state, is_best, checkpoint="/content/drive/MyDrive", filename='checkpoint.pth.tar'):
-    filepath = os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v2_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
+    filepath = os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v3_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
     torch.save(state, filepath)
     if is_best:
-        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v2_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + 'model_best.pth.tar'))
+        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v3_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + 'model_best.pth.tar'))
 
 
 title = 'Cityscapes'
@@ -96,7 +96,7 @@ for name, param in model.named_parameters():
 head_params += [v for k, v in mapfns.named_parameters() if 'gamma' not in k and 'beta' not in k]
 
 optimizer = optim.Adam([
-    {'params': backbone_params, 'lr': 1e-5},
+    {'params': backbone_params, 'lr': 5e-5},
     {'params': head_params, 'lr': 1e-4}
 ])
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
