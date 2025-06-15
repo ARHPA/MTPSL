@@ -211,8 +211,8 @@ class SegNet_enc(nn.Module):
     def __init__(self, input_channels):
         super(SegNet_enc, self).__init__()
         # initialise network parameters
-        # filter = [64, 128, 256, 512, 512]
-        filter = [64, 128, 128, 256, 256]
+        filter = [64, 128, 256, 512, 512]
+        # filter = [64, 128, 128, 256, 256]
         self.filter = filter
         self.num_tasks = len(input_channels)
         # Task-specific input layer

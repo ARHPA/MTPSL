@@ -92,15 +92,15 @@ class SegFormerMTL(nn.Module):
         self.type = type_
         self.class_nb = class_nb
         
-        # Initialize SegFormer backbone with lightweight configuration
+        # Initialize SegFormer backbone with B1 configuration
         config = SegformerConfig(
             num_channels=3,
             num_labels=class_nb,
             image_size=512,
             num_encoder_blocks=4,
-            depths=[2, 2, 2, 2],  # Lightweight configuration
+            depths=[2, 2, 2, 2],  # B1 configuration
             sr_ratios=[8, 4, 2, 1],
-            hidden_sizes=[32, 64, 160, 256],  # Smaller hidden sizes for lightweight variant
+            hidden_sizes=[64, 128, 320, 512],  # B1 hidden sizes (larger than B0)
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_attention_heads=[1, 2, 5, 8],
@@ -116,9 +116,9 @@ class SegFormerMTL(nn.Module):
             semantic_loss_ignore_index=-1,
         )
         
-        # Load pretrained SegFormer
+        # Load pretrained SegFormer B1 model
         self.segformer = SegformerForSemanticSegmentation.from_pretrained(
-            "nvidia/segformer-b0-finetuned-ade-512-512", 
+            "nvidia/segformer-b1-finetuned-ade-512-512", 
             config=config,
             ignore_mismatched_sizes=True
         )
@@ -175,7 +175,7 @@ class SegFormerMTL(nn.Module):
         
         # Get the 1/32 scale features (last encoder output)
         # hidden_states[4] corresponds to the final 1/32 scale output
-        features = segformer_outputs.hidden_states[-1]  # Shape: [bs, 256, H/32, W/32]
+        features = segformer_outputs.hidden_states[-1]  # Shape: [bs, 512, H/32, W/32] for B1
         
         # Get the decoder logits (for task predictions)
         segformer_logits = segformer_outputs.logits
