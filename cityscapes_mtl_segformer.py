@@ -53,19 +53,19 @@ for i in range(len(paths)):
 
 stl_performance = {
                     'full': {'semantic': 74.07, 'depth': 0.0124}, 
-                    'onelabel': {'semantic': 70.04, 'depth': 0.0140}, 
+                    'onelabel': {'semantic': 74.90, 'depth': 0.0161}, 
                     }
 
 # checkpoint="/content/drive/MyDrive"
 def save_checkpoint(state, is_best, checkpoint="/content/drive/MyDrive", filename='checkpoint.pth.tar'):
-    filepath = os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v3_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + filename)
+    filepath = os.path.join(checkpoint, 'mtl_segformer_{}_v1_'.format(opt.ssl_type) + filename)
     torch.save(state, filepath)
     if is_best:
-        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_segformer_{}_{}_{}_{}_v3_'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight) + 'model_best.pth.tar'))
+        shutil.copyfile(filepath, os.path.join(checkpoint, 'mtl_segformer_{}_v1_'.format(opt.ssl_type) + 'model_best.pth.tar'))
 
 
 title = 'Cityscapes'
-logger = Logger(os.path.join(opt.out, 'mtl_segformer_{}_{}_{}_{}_log.txt'.format(opt.ssl_type, opt.rampup, opt.con_weight, opt.reg_weight)), title=title)
+logger = Logger(os.path.join(opt.out, 'mtl_segformer_{}_log.txt'.format(opt.ssl_type)), title=title)
 logger.set_names(['Epoch', 'T.Ls', 'T. mIoU', 'T. Pix', 'T.Ld', 'T.abs', 'T.rel',
     'V.Ls', 'V. mIoU', 'V. Pix', 'V.Ld', 'V.abs', 'V.rel', 'Con L', 'Ws', 'Wd'])
 
@@ -99,7 +99,7 @@ optimizer = optim.Adam([
     {'params': backbone_params, 'lr': 2e-5},
     {'params': head_params, 'lr': 1e-4}
 ])
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=70, gamma=0.5)
 
 
 # params_film = [v for k, v in mapfns.named_parameters()]
@@ -132,8 +132,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-print('Parameter Space: ABS: {:.1f}\n'.format(count_parameters(model)))
-print('Total Parameter Space: ABS: {:.1f}, REL: {:.4f}\n'.format(count_parameters(model) + count_parameters(mapfns),
+print('Parameter Space: ABS: {:.1f}, REL: {:.4f}\n'.format(count_parameters(model),
                                                            count_parameters(model)/39081069))
 print('LOSS FORMAT: SEMANTIC_LOSS MEAN_IOU PIX_ACC | DEPTH_LOSS ABS_ERR ROOT_MSE | NORMAL_LOSS MEAN MED <11.25 <22.5 <30\n')
 
