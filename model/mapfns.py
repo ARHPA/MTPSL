@@ -272,112 +272,185 @@ class SegNet_enc(nn.Module):
 
 
 class Mapfns(nn.Module):
-    def __init__(self, tasks=['semantic', 'depth', 'normal'], input_channels=[13, 1, 3]):
+    def __init__(self, tasks=['semantic', 'depth'], input_channels=[7, 1], 
+                 backbone_feat_channels=512, embedding_dim=64, num_layers=3):
         super(Mapfns, self).__init__()
-        # initialise network parameters
-        assert len(tasks) == len(input_channels) 
-        self.tasks = tasks 
-        self.input_channels = {}
-        for t, task in enumerate(tasks):
-            self.input_channels[task] = input_channels[t]
-
-        self.mapfns = SegNet_enc(input_channels=input_channels)
-
+        self.tasks = tasks
+        self.input_channels = {task: ch for task, ch in zip(tasks, input_channels)}
+        
+        # Shared lightweight encoder with FiLM conditioning
+        self.encoder = LightweightMapEncoder(
+            input_channels=input_channels,
+            num_tasks=len(tasks),
+            embedding_dim=embedding_dim,
+            num_layers=num_layers
+        )
+        
+        # Feature projection for backbone features - updated to 512 channels
+        self.feat_proj = nn.Conv2d(backbone_feat_channels, 64, kernel_size=1)
+        
+        # Initialize weights
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.xavier_normal_(m.weight)
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.xavier_normal_(m.weight)
-                nn.init.constant_(m.bias, 0)
-
-    def forward(self, x_pred, gt, feat, w, ssl_type, reg_weight=0.5):
+    
+    def forward(self, x_pred, gt, feat, w, ssl_type='full', reg_weight=0.5):
+        # Convert task indices to integers
         if ssl_type == 'full':
-            target_task_index = torch.arange(len(self.tasks)) 
-            source_task_index = torch.arange(len(self.tasks))
+            source_indices = list(range(len(self.tasks)))
+            target_indices = list(range(len(self.tasks)))
         else:
-            target_task_index = (w.data == 1).nonzero(as_tuple=False).view(-1)
-            source_task_index = (w.data == 0).nonzero(as_tuple=False).view(-1)
-
-        # loss = torch.tensor(0).to(feat.device)
-        loss = 0
-        if len(source_task_index) > 0:
-            for source_task in source_task_index:
-                for target_task in target_task_index:
-                    if source_task != target_task:
-
-                        source_pred = x_pred[source_task]
-                        target_gt = gt[target_task]
-
-                        source_pred = self.pre_process_pred(source_pred, task=self.tasks[source_task])
-                        target_gt = self.pre_process_gt(target_gt, task=self.tasks[target_task])
-
-                        # config_task.source_task = [source_task]
-                        # config_task.target_task = [target_task]
-                        # source_task, target_task = config_task.source_task[0], config_task.target_task[0]
-                        A_taskpair = torch.zeros(len(self.tasks), len(self.tasks)).to(source_pred.device)
-                        A_taskpair[source_task, target_task] = 1.0
-                        n, m = A_taskpair.size()
-                        A_taskpair = A_taskpair.flatten()[:-1].view(n-1,n+1)[:,1:].flatten().view(1,-1)
-                        config_task.A_taskpair = A_taskpair
-                        
-                        # print(f"source_pred: {source_pred.shape}")
-                        # print(f"target_gt: {target_gt.shape}")
-
-                        mapout_source = self.mapfns(source_pred, input_task=source_task)
-                        mapout_target = self.mapfns(target_gt, input_task=target_task)
-
-                        # print(f"mapout_source: {mapout_source.shape}")
-                        # print(f"mapout_target: {mapout_target.shape}")
-                        # print(f"feat: {feat.detach().shape}")
-
-                        loss = loss + self.compute_loss(mapout_source, mapout_target, feat, reg_weight=reg_weight)
-                 
-
-        return loss
-
-    def pre_process_pred(self, pred, task):
+            # Convert to list of integers
+            source_indices = (w == 0).nonzero(as_tuple=False).squeeze(1).tolist()
+            target_indices = (w == 1).nonzero(as_tuple=False).squeeze(1).tolist()
+        
+        total_loss = 0
+        valid_pairs = 0
+        
+        # Process all valid task pairs
+        for s_idx in source_indices:
+            for t_idx in target_indices:
+                if s_idx == t_idx:
+                    continue
+                    
+                # Preprocess predictions and ground truth
+                source_pred = self.preprocess(x_pred[s_idx], self.tasks[s_idx], is_pred=True)
+                target_gt = self.preprocess(gt[t_idx], self.tasks[t_idx], is_pred=False)
+                
+                # Form canonical task pair (sorted to ensure consistent ordering)
+                task_pair = tuple(sorted((s_idx, t_idx)))
+                
+                # Encode with task-pair conditioning
+                map_src = self.encoder(source_pred, s_idx, task_pair)
+                map_tgt = self.encoder(target_gt, t_idx, task_pair)
+                
+                # Compute consistency loss
+                total_loss += self.consistency_loss(map_src, map_tgt, feat, reg_weight)
+                valid_pairs += 1
+        
+        return total_loss / max(valid_pairs, 1) if valid_pairs else 0
+    
+    def preprocess(self, data, task, is_pred=True):
+        """Normalize task outputs for consistent processing"""
         if task == 'semantic':
-            x_pred = F.gumbel_softmax(pred, dim=1, tau=1, hard=True)
-            while torch.isnan(x_pred.sum()):
-                x_pred = F.gumbel_softmax(pred, dim=1, tau=1, hard=True)
-            pred = x_pred
+            if is_pred:
+                # Use softmax for predictions
+                return F.softmax(data, dim=1)
+            # Convert GT to one-hot
+            mask = (data == -1).float()
+            valid_data = data * (1 - mask)
+            return F.one_hot(valid_data.long(), self.input_channels[task]).permute(0,3,1,2).float()
+        
         elif task == 'depth':
-            x_pred = pred / (pred.max() + 1e-12) 
-            pred = x_pred
-        elif task == 'normal':
-            pred = (pred + 1.0) / 2.0
-        return pred
+            # Normalize to [0, 1]
+            data = data.clone()
+            data_max = data.max()
+            if data_max > 0:
+                return data / data_max
+            return data
+        
+        return data
+    
+    def consistency_loss(self, src_feat, tgt_feat, backbone_feat, reg_weight):
+        """Compute multi-part consistency loss"""
+        # Project backbone features
+        proj_feat = self.feat_proj(backbone_feat)
+        
+        # Resize features to match backbone resolution
+        src_feat = F.adaptive_avg_pool2d(src_feat, proj_feat.shape[-2:])
+        tgt_feat = F.adaptive_avg_pool2d(tgt_feat, proj_feat.shape[-2:])
+        
+        # Cross-task consistency (cosine similarity)
+        cross_loss = 1 - F.cosine_similarity(src_feat, tgt_feat, dim=1).mean()
+        
+        # Feature alignment regularization
+        src_reg = 1 - F.cosine_similarity(src_feat, proj_feat, dim=1).mean()
+        tgt_reg = 1 - F.cosine_similarity(tgt_feat, proj_feat, dim=1).mean()
+        
+        return cross_loss + reg_weight * (src_reg + tgt_reg)
 
-    def pre_process_gt(self, gt, task):
-        if task == 'semantic':
-            gt = gt.unsqueeze(0)
-            binary_mask = (gt == -1).type(torch.FloatTensor).cuda()
-            num_classes = self.input_channels[task]
-            gt_ = gt.float() * (1 - binary_mask)
-            gt__ = torch.zeros(gt.size(0), num_classes, gt.size(2), gt.size(3)).scatter_(1, gt_.type(torch.LongTensor), 1).cuda().detach() * (1 - binary_mask)
-        elif task == 'depth':
-            gt__ = gt / (gt.max() + 1e-12)
-        else:
-            gt__ = (gt + 1.0) / 2.0
-            # gt__ = gt
-        return gt__
 
-    def compute_loss(self, mapout_source, mapout_target, feat, reg_weight=0.5):
-        # cross-task consistency
-        l_s_t = 1 - F.cosine_similarity(mapout_source, mapout_target, dim=1, eps=1e-12).mean()
-        # regularization
-        l_s_f = 1 - F.cosine_similarity(mapout_source, feat.detach(), dim=1, eps=1e-12).mean()
-        l_t_f = 1 - F.cosine_similarity(mapout_target, feat.detach(), dim=1, eps=1e-12).mean()
+class FiLM(nn.Module):
+    """Feature-wise Linear Modulation layer"""
+    def __init__(self, embed_dim, num_features):
+        super().__init__()
+        self.gamma = nn.Linear(embed_dim, num_features)
+        self.beta = nn.Linear(embed_dim, num_features)
+        
+    def forward(self, x, embedding):
+        # Ensure proper dimensions
+        if embedding.dim() == 1:
+            embedding = embedding.unsqueeze(0)
+            
+        gamma = self.gamma(embedding)
+        beta = self.beta(embedding)
+        
+        # Reshape for broadcasting
+        gamma = gamma.view(1, -1, 1, 1)
+        beta = beta.view(1, -1, 1, 1)
+        
+        return x * (1 + torch.sigmoid(gamma)) + beta
 
-        if reg_weight > 0:
-            loss = l_s_t + reg_weight * (l_s_f + l_t_f)
-        else:
-            loss = l_s_t
-        return loss
+
+class LightweightMapEncoder(nn.Module):
+    def __init__(self, input_channels, num_tasks, embedding_dim=64, num_layers=3):
+        super().__init__()
+        self.num_tasks = num_tasks
+        self.embedding_dim = embedding_dim
+        
+        # Task embedding layers
+        self.task_embeddings = nn.Embedding(num_tasks, embedding_dim)
+        
+        # Input projections
+        self.input_proj = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(ch, 64, kernel_size=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True)
+            ) for ch in input_channels
+        ])
+        
+        # Shared convolutional layers with FiLM conditioning
+        self.conv_layers = nn.ModuleList()
+        self.film_layers = nn.ModuleList()
+        
+        for i in range(num_layers):
+            conv = nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=3, padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True)
+            film = FiLM(embedding_dim * 2, 64)
+            self.conv_layers.append(conv)
+            self.film_layers.append(film)
+    
+    def forward(self, x, input_task_idx, task_pair):
+        """Process input with task-specific conditioning
+        
+        Args:
+            x: Input tensor
+            input_task_idx: Index of the task for this input
+            task_pair: Tuple (task1, task2) for conditioning
+        """
+        # Project input based on input task
+        x = self.input_proj[input_task_idx](x)
+        
+        # Get task embeddings for both tasks in the pair
+        task1_emb = self.task_embeddings(torch.tensor([task_pair[0]], device=x.device))
+        task2_emb = self.task_embeddings(torch.tensor([task_pair[1]], device=x.device))
+        
+        # Concatenate embeddings for conditioning
+        task_embed = torch.cat([task1_emb, task2_emb], dim=-1)
+        
+        # Process through shared layers with FiLM conditioning
+        for conv, film in zip(self.conv_layers, self.film_layers):
+            x = conv(x)
+            x = film(x, task_embed)
+        
+        return x
 
  
