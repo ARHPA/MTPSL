@@ -423,7 +423,7 @@ class LightweightMapEncoder(nn.Module):
             conv = nn.Sequential(
                 nn.Conv2d(64, 64, kernel_size=3, padding=1),
                 nn.BatchNorm2d(64),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True))
             film = FiLM(embedding_dim * 2, 64)
             self.conv_layers.append(conv)
             self.film_layers.append(film)
